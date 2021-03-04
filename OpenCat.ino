@@ -69,49 +69,60 @@ void dmpDataReady() {
   mpuInterrupt = true;
 }
 
+/*
+- Now there is  an **IRreceiver** and **IRsender** object like the well known Arduino **Serial** object.
+- Just remove the line `IRrecv IrReceiver(IR_RECEIVE_PIN);` and/or `IRsend IrSender;` in your program, and replace all occurrences of `IRrecv.` or `irrecv.` with `IrReceiver`.
+- Since the decoded values are now in `IrReceiver.decodedIRData` and not in `results` any more, remove the line `decode_results results` or similar.
+- Like for the Serial object, call [`IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);`](https://github.com/Arduino-IRremote/Arduino-IRremote/blob/master/examples/IRreceiveDemo/IRreceiveDemo.ino#L38) or `IrReceiver.begin(IR_RECEIVE_PIN, DISABLE_LED_FEEDBACK);` instead of the `IrReceiver.enableIRIn();` or `irrecv.enableIRIn();` in setup().
+- Old `decode(decode_results *aResults)` function is replaced by simple `decode()`. So if you have a statement `if(irrecv.decode(&results))` replace it with `if (IrReceiver.decode())`.
+- The decoded result is now in in `IrReceiver.decodedIRData` and not in `results` any more, therefore replace any occurrences of `results.value`  and / or `results.decode_type` (and similar) to `IrReceiver.decodedIRData.decodedRawData` and / or `IrReceiver.decodedIRData.decodedRawData`.
+- Overflow, Repeat and other flags are now in [`IrReceiver.receivedIRData.flags`](https://github.com/Arduino-IRremote/Arduino-IRremote/blob/master/src/IRremote.h#L126).
+- Seldom used: `results.rawbuf` and `results.rawlen` must be replaced by `IrReceiver.decodedIRData.rawDataPtr->rawbuf` and `IrReceiver.decodedIRData.rawDataPtr->rawlen`.
+- The old functions `sendNEC()` and `sendJVC()` are deprecated and renamed to `sendNECMSB()` and `sendJVCMSB()` to make it clearer that they send data with MSB first, which is not the standard for NEC and JVC. Use them to send your **old 32 bit IR data codes**.
+In the new version you will send NEC commands not by 32 bit codes but by a (constant) 8 bit address and an 8 bit command.
+*/
+
 // https://brainy-bits.com/blogs/tutorials/ir-remote-arduino
 #include <IRremote.h>
 /*-----( Declare objects )-----*/
-IRrecv irrecv(IR_RECIEVER);     // create instance of 'irrecv'
-decode_results results;      // create instance of 'decode_results'
 
 String translateIR() // takes action based on IR code received
 // describing Remote IR codes.
 {
-  switch (results.value) {
+  switch (IrReceiver.decodedIRData.decodedRawData) {
     //IR signal    key on IR remote           //key mapping
-    case 0xFFA25D: /*PTLF(" CH-");   */       return (F(K00));
-    case 0xFF629D: /*PTLF(" CH");  */         return (F(K01));
-    case 0xFFE21D: /*PTLF(" CH+"); */         return (F(K02));
+    case 0xBA45FF00: /*PTLF(" CH-");   */       return (F(K00));
+    case 0xB946FF00: /*PTLF(" CH");  */         return (F(K01));
+    case 0xB847FF00: /*PTLF(" CH+"); */         return (F(K02));
 
-    case 0xFF22DD: /*PTLF(" |<<"); */         return (F(K10));
-    case 0xFF02FD: /*PTLF(" >>|"); */         return (F(K11));
-    case 0xFFC23D: /*PTLF(" >||"); */         return (F(K12));
+    case 0xBB44FF00: /*PTLF(" |<<"); */         return (F(K10));
+    case 0xBF40FF00: /*PTLF(" >>|"); */         return (F(K11));
+    case 0xBC43FF00: /*PTLF(" >||"); */         return (F(K12));
 
-    case 0xFFE01F: /*PTLF(" -");   */         return (F(K20));
-    case 0xFFA857: /*PTLF(" +");  */          return (F(K21));
-    case 0xFF906F: /*PTLF(" EQ"); */          return (F(K22));
+    case 0xF807FF00: /*PTLF(" -");   */         return (F(K20));
+    case 0xEA15FF00: /*PTLF(" +");  */          return (F(K21));
+    case 0xF609FF00: /*PTLF(" EQ"); */          return (F(K22));
 
-    case 0xFF6897: /*PTLF(" 0");  */          return (F(K30));
-    case 0xFF9867: /*PTLF(" 100+"); */        return (F(K31));
-    case 0xFFB04F: /*PTLF(" 200+"); */        return (F(K32));
+    case 0xE916FF00: /*PTLF(" 0");  */          return (F(K30));
+    case 0xE619FF00: /*PTLF(" 100+"); */        return (F(K31));
+    case 0xF20DFF00: /*PTLF(" 200+"); */        return (F(K32));
 
-    case 0xFF30CF: /*PTLF(" 1");  */          return (F(K40));
-    case 0xFF18E7: /*PTLF(" 2");  */          return (F(K41));
-    case 0xFF7A85: /*PTLF(" 3");  */          return (F(K42));
+    case 0xF30CFF00: /*PTLF(" 1");  */          return (F(K40));
+    case 0xE718FF00: /*PTLF(" 2");  */          return (F(K41));
+    case 0xA15EFF00: /*PTLF(" 3");  */          return (F(K42));
 
-    case 0xFF10EF: /*PTLF(" 4");  */          return (F(K50));
-    case 0xFF38C7: /*PTLF(" 5");  */          return (F(K51));
-    case 0xFF5AA5: /*PTLF(" 6");  */          return (F(K52));
+    case 0xF708FF00: /*PTLF(" 4");  */          return (F(K50));
+    case 0xE31CFF00: /*PTLF(" 5");  */          return (F(K51));
+    case 0xA55AFF00: /*PTLF(" 6");  */          return (F(K52));
 
-    case 0xFF42BD: /*PTLF(" 7");  */          return (F(K60));
-    case 0xFF4AB5: /*PTLF(" 8");  */          return (F(K61));
-    case 0xFF52AD: /*PTLF(" 9");  */          return (F(K62));
+    case 0xBD42FF00: /*PTLF(" 7");  */          return (F(K60));
+    case 0xAD52FF00: /*PTLF(" 8");  */          return (F(K61));
+    case 0xB54AFF00: /*PTLF(" 9");  */          return (F(K62));
 
     case 0xFFFFFFFF: return (""); //Serial.println(" REPEAT");
 
     default: {
-        //Serial.println(results.value, HEX);
+        //Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
       }
       return ("");                      //Serial.println("null");
   }// End Case
@@ -370,7 +381,7 @@ void setup() {
   //IR
   {
     //PTLF("IR Receiver Button Decode");
-    irrecv.enableIRIn(); // Start the receiver
+    IrReceiver.begin(IR_RECIEVER, ENABLE_LED_FEEDBACK);
   }
 
   assignSkillAddressToOnboardEeprom();
@@ -427,7 +438,7 @@ void loop() {
 
     // input block
     //else if (t == 0) {
-    if (irrecv.decode(&results)) {
+    if (IrReceiver.decode()) {
       String IRsig = irParser(translateIR());
       //PTL(IRsig);
       if (IRsig != "") {
@@ -438,7 +449,7 @@ void loop() {
           token = T_SKILL;
         newCmdIdx = 2;
       }
-      irrecv.resume(); // receive the next value
+      IrReceiver.resume();
     }
     if ( Serial.available() > 0) {
       token = Serial.read();
